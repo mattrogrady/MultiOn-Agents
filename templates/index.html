@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Scraper Chatbot</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
+</head>
+<body>
+    <section class="section">
+        <div class="container">
+            <h1 class="title">Agent Scraping and Browsing Demo</h1>
+            <div class="box">
+                <div id="chatbox" class="content">
+                    <!-- Chat messages will appear here -->
+                </div>
+                <div id="input-section" class="field has-addons">
+                    <div class="control is-expanded">
+                        <input id="secondary-user-input" class="input" type="text" placeholder="Type your response here">
+                    </div>
+                    <div class="control">
+                        <button id="secondary-btn" class="button is-primary">Submit</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        let productsData = [];
+        let waitingForUrl = true;
+        let waitingForProductSelection = false;
+
+        // Start the conversation when the page loads
+        window.onload = function() {
+            addMessage("Bot", "Hello! Please enter a URL to scrape products.");
+        };
+
+        document.getElementById('secondary-btn').addEventListener('click', function() {
+            const userInput = document.getElementById('secondary-user-input').value.trim();
+            addMessage("User", userInput);
+            document.getElementById('secondary-user-input').value = ''; // Clear input field
+
+            if (waitingForUrl) {
+                fetch('/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: userInput }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    productsData = data; // Store the scraped data
+                    let message = "Here are the top items in this store:";
+                    addMessage("Bot", message);
+                    data.forEach(item => {
+                        addMessage("Bot", `${item.name}, ${item.price}, ${item.purchase_url}`);
+                    });
+
+                    addMessage("Bot", "Would you like to purchase a cheaper version of a product on Amazon? (Yes/No)");
+                    waitingForUrl = false;
+                });
+            } else if (!waitingForProductSelection) {
+                const response = userInput.toLowerCase();
+                if (response === "yes") {
+                    addMessage("Bot", "Which product would you like to buy?");
+                    waitingForProductSelection = true;
+                } else if (response === "no") {
+                    addMessage("Bot", "Okay, bye!");
+                    document.getElementById('input-section').style.display = 'none'; // Hide input
+                } else {
+                    addMessage("Bot", "Please respond with 'Yes' or 'No'.");
+                }
+            } else {
+                const productName = userInput.toLowerCase();
+                const selectedProduct = productsData.find(item => item.name.toLowerCase().includes(productName));
+
+                if (selectedProduct) {
+                    addMessage("Bot", `Okay, sending information about ${selectedProduct.name} to our Amazon agent...`);
+                    fetch('/browse_amazon', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            product_name: selectedProduct.name,
+                            product_price: selectedProduct.price,
+                        }),
+                    })
+                    .then(response => response.json())
+                    .then(() => {
+                        addMessage("Bot", "Done!");
+                        document.getElementById('input-section').style.display = 'none'; // Hide input
+                        waitingForProductSelection = false;
+                    });
+                } else {
+                    addMessage("Bot", "Product not found. Please try again.");
+                }
+            }
+        });
+
+        function addMessage(sender, text) {
+            const chatbox = document.getElementById('chatbox');
+            const message = document.createElement('p');
+            message.innerHTML = `<strong>${sender}:</strong> ${text}`;
+            chatbox.appendChild(message);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+
+
